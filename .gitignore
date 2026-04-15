@@ -1,0 +1,42 @@
+# --- Cloned submodules (restored by init.bat) ---
+ace-step/
+foundation1/
+separator/
+
+# --- Python environments ---
+.venv/
+
+# --- Generated and uploaded files ---
+outputs/
+uploads/
+
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# --- Distribution / packaging ---
+*.egg-info/
+dist/
+build/
+
+# --- Environment variables ---
+.env
+.env.*
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# --- Docs ---
+docs/
+
+# --- Claude ---
+.claude/
+CLAUDE.md
+
+# --- Utility Scripts ---
+_write_*.py

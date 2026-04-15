@@ -1,0 +1,20 @@
+{
+  "ace-step": {
+    "url": "https://github.com/ace-step/ACE-Step-1.5.git",
+    "commit": "2d14b9e070aff945fd8b3dc3491a4386b91702a6",
+    "description": "Merge PR #793 feat/jetson-docker-support (2026-03-08)",
+    "dir": "ace-step"
+  },
+  "foundation1": {
+    "url": "https://github.com/RoyalCities/RC-stable-audio-tools.git",
+    "commit": "f1f13af77cb9bc34dd6eb001b2430b3c85375ea2",
+    "description": "Foundation-1 Support (2026-03-16)",
+    "dir": "foundation1"
+  },
+  "python-audio-separator": {
+    "url": "https://github.com/nomadkaraoke/python-audio-separator.git",
+    "commit": "0a644dbb07d94a7e747d5265e3abbaf600459449",
+    "description": "fix: synchronous endpoint + Cloud Run scaling (2026-03-26)",
+    "dir": "separator"
+  }
+}

@@ -1,0 +1,21 @@
+[project]
+name = "kgone-gateway"
+version = "0.1.0"
+description = "Unified REST API gateway for ACE-Step 1.5 and Foundation-1"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+kgone = "main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["services", "foundation1_server"]
