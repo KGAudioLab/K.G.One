@@ -31,8 +31,9 @@ build/
 *.DS_Store
 Thumbs.db
 
-# --- Docs ---
-docs/
+# --- Examples ---
+examples/
+mock-server/samples/
 
 # --- Claude ---
 .claude/

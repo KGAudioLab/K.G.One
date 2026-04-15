@@ -1,88 +1,103 @@
-"""KGOne — unified REST API gateway for ACE-Step 1.5 (fullsong), Foundation-1 (clip), and UVR separator."""
+"""KGOne Mock Gateway — same API surface as the real server, no ML models required.
+
+Place sample files in ./samples/ before starting:
+  sample.mp3
+  clip.wav
+  clip.mid
+  separator_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3
+  separator_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3
+
+Run:
+  uv sync
+  .venv/Scripts/python.exe main.py        # Windows
+  .venv/bin/python main.py                # Linux / macOS
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
-import logging
-import shutil
-import urllib.parse
+import time
 import uuid
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-import httpx
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
-from services.model_manager import ModelManager, ModelNotActiveError, model_manager
-from services.acestep_client import ACESTEP_BASE_URL
-from services.foundation1_client import FOUNDATION1_BASE_URL
-from services.separator_runner import ALLOWED_MODELS, OUTPUT_DIR, UPLOAD_DIR, separator_runner
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger(__name__)
-
 # ---------------------------------------------------------------------------
-# App lifecycle
+# Paths & constants
 # ---------------------------------------------------------------------------
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        app.state.http_client = client
-        yield
-    await model_manager.unload()
+BASE_DIR = Path(__file__).parent
+SAMPLES_DIR = BASE_DIR / "samples"
 
+ALLOWED_MODELS = {
+    "UVR-MDX-NET-Inst_HQ_3.onnx",
+    "MDX23C-8KFFT-InstVoc_HQ.ckpt",
+    "htdemucs_6s.yaml",
+}
+
+# ---------------------------------------------------------------------------
+# In-memory state
+# ---------------------------------------------------------------------------
+
+_active_model: Optional[str] = None
+_tasks: dict[str, float] = {}  # task_id -> unix timestamp of creation
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="KGOne Gateway",
     description="Unified REST API for ACE-Step 1.5 (full-song music) and Foundation-1 (clip MIDI/WAV).",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _proxy(client: httpx.AsyncClient, method: str, url: str, request: Request) -> Response:
-    """Forward a request body + headers to a sub-service and return its response."""
-    body = await request.body()
-    headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
-    try:
-        resp = await client.request(method, url, content=body, headers=headers)
-    except httpx.ConnectError:
-        raise HTTPException(503, "Sub-service unreachable — is the model loaded?")
-    return Response(
-        content=resp.content,
-        status_code=resp.status_code,
-        headers={k: v for k, v in resp.headers.items() if k.lower() not in ("transfer-encoding",)},
-        media_type=resp.headers.get("content-type"),
-    )
-
 
 def _require(model_name: str) -> None:
     """Raise 503 if the requested model is not the active one."""
-    if model_manager.active_model != model_name:
+    if _active_model != model_name:
         raise HTTPException(
             status_code=503,
             detail={
                 "error": f"Model '{model_name}' is not loaded. POST /v1/models/load first.",
-                "active_model": model_manager.active_model,
+                "active_model": _active_model,
             },
         )
+
+
+def _sample(filename: str) -> Path:
+    """Return path to a sample file, raising 500 if it is missing."""
+    path = SAMPLES_DIR / filename
+    if not path.is_file():
+        raise HTTPException(500, f"Mock sample file not found: samples/{filename}")
+    return path
+
+
+def _task_age(task_id: str) -> float:
+    """Return seconds since this task was created, or raise 404 if unknown."""
+    created_at = _tasks.get(task_id)
+    if created_at is None:
+        raise HTTPException(404, f"Task '{task_id}' not found")
+    return time.time() - created_at
 
 
 # ---------------------------------------------------------------------------
 # Health & model management
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health", tags=["system"])
 async def health():
-    return {"status": "ok", "active_model": model_manager.active_model}
+    return {"status": "ok", "active_model": _active_model}
 
 
 class LoadModelRequest(BaseModel):
@@ -101,22 +116,23 @@ async def load_model(req: LoadModelRequest):
     For `"separator"` it only terminates the currently running model subprocess to free VRAM —
     no persistent process is started. After loading `"separator"`, call `POST /v1/separator/separate`.
     """
+    global _active_model
     if req.model not in ("fullsong", "clip", "separator"):
         raise HTTPException(400, f"Unknown model '{req.model}'. Must be 'fullsong', 'clip', or 'separator'.")
-    if separator_runner.active:
-        raise HTTPException(503, "A stem separation task is currently running. Wait for it to complete first.")
-    await model_manager.load(req.model)
-    return {"active_model": model_manager.active_model, "status": "ready"}
+    await asyncio.sleep(5)
+    _active_model = req.model
+    return {"active_model": _active_model, "status": "ready"}
 
 
 @app.get("/v1/models/status", tags=["system"])
 async def model_status():
-    return {"active_model": model_manager.active_model}
+    return {"active_model": _active_model}
 
 
 # ---------------------------------------------------------------------------
 # /v1/fullsong — ACE-Step 1.5
 # ---------------------------------------------------------------------------
+
 
 class FullsongGenerateRequest(BaseModel):
     """ACE-Step 1.5 generation request. All listed fields are forwarded as-is;
@@ -157,7 +173,7 @@ class FullsongGenerateRequest(BaseModel):
     tags=["fullsong"],
     summary="Submit a full-song generation task (ACE-Step 1.5)",
 )
-async def fullsong_generate(req: FullsongGenerateRequest, request: Request):
+async def fullsong_generate(req: FullsongGenerateRequest):
     """Proxy to ACE-Step's `/release_task`.
 
     Forwards the exact JSON body you send (only fields you include are forwarded —
@@ -166,21 +182,19 @@ async def fullsong_generate(req: FullsongGenerateRequest, request: Request):
     Returns `{"data": {"task_id": "...", "status": "queued", ...}}`.
     """
     _require("fullsong")
-    body = req.model_dump_json(exclude_unset=True).encode()
-    try:
-        resp = await request.app.state.http_client.post(
-            f"{ACESTEP_BASE_URL}/release_task",
-            content=body,
-            headers={"Content-Type": "application/json"},
-        )
-    except httpx.ConnectError:
-        raise HTTPException(503, "Sub-service unreachable — is the model loaded?")
-    return Response(
-        content=resp.content,
-        status_code=resp.status_code,
-        headers={k: v for k, v in resp.headers.items() if k.lower() not in ("transfer-encoding",)},
-        media_type=resp.headers.get("content-type"),
-    )
+    task_id = str(uuid.uuid4())
+    _tasks[task_id] = time.time()
+    return {
+        "data": {
+            "task_id": task_id,
+            "status": "queued",
+            "queue_position": 1,
+        },
+        "code": 200,
+        "error": None,
+        "timestamp": int(time.time() * 1000),
+        "extra": None,
+    }
 
 
 @app.get(
@@ -188,23 +202,60 @@ async def fullsong_generate(req: FullsongGenerateRequest, request: Request):
     tags=["fullsong"],
     summary="Poll a fullsong generation task result",
 )
-async def fullsong_result(task_id: str, request: Request):
+async def fullsong_result(task_id: str):
     """Query the result of a generation task.
 
     Returns ACE-Step's raw result payload. Poll until `status` is `1` (succeeded),
     then call `GET /v1/fullsong/audio/{task_id}` to download the audio.
     """
     _require("fullsong")
-    payload = json.dumps({"task_id_list": [task_id]}).encode()
-    try:
-        resp = await request.app.state.http_client.post(
-            f"{ACESTEP_BASE_URL}/query_result",
-            content=payload,
-            headers={"Content-Type": "application/json"},
-        )
-    except httpx.ConnectError:
-        raise HTTPException(503, "ACE-Step service unreachable")
-    return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
+    age = _task_age(task_id)
+    ts = int(time.time() * 1000)
+
+    if age < 10:
+        result_inner = json.dumps([{
+            "file": "",
+            "wave": "",
+            "status": 0,
+            "create_time": int(_tasks[task_id]),
+            "env": "development",
+            "progress": min(0.9, age / 10),
+            "stage": "Phase 1: Generating CoT metadata (once for all items)...",
+        }])
+        return {
+            "data": [{
+                "task_id": task_id,
+                "result": result_inner,
+                "status": 0,
+                "progress_text": "Generating...",
+            }],
+            "code": 200,
+            "error": None,
+            "timestamp": ts,
+            "extra": None,
+        }
+
+    result_inner = json.dumps([{
+        "file": "/v1/audio?path=mock",
+        "wave": "",
+        "status": 1,
+        "create_time": int(_tasks[task_id]),
+        "env": "development",
+        "progress": 1.0,
+        "stage": "succeeded",
+    }])
+    return {
+        "data": [{
+            "task_id": task_id,
+            "result": result_inner,
+            "status": 1,
+            "progress_text": "Done.",
+        }],
+        "code": 200,
+        "error": None,
+        "timestamp": ts,
+        "extra": None,
+    }
 
 
 @app.get(
@@ -212,7 +263,7 @@ async def fullsong_result(task_id: str, request: Request):
     tags=["fullsong"],
     summary="Download generated audio for a completed fullsong task",
 )
-async def fullsong_audio(task_id: str, request: Request, index: int = 0):
+async def fullsong_audio(task_id: str, index: int = 0):
     """Download the generated audio file for a completed task.
 
     Internally queries ACE-Step for the task result, extracts the audio path,
@@ -221,75 +272,20 @@ async def fullsong_audio(task_id: str, request: Request, index: int = 0):
     Use `index` (0-based) to select a specific file when `batch_size > 1`.
     """
     _require("fullsong")
-    client: httpx.AsyncClient = request.app.state.http_client
-
-    # Step 1: fetch the task result from ACE-Step
-    try:
-        result_resp = await client.post(
-            f"{ACESTEP_BASE_URL}/query_result",
-            content=json.dumps({"task_id_list": [task_id]}).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-    except httpx.ConnectError:
-        raise HTTPException(503, "ACE-Step service unreachable")
-
-    try:
-        result_data = result_resp.json()
-    except Exception:
-        raise HTTPException(502, "Invalid response from ACE-Step")
-
-    items = result_data.get("data", [])
-    task_item = next((item for item in items if item.get("task_id") == task_id), None)
-    if task_item is None:
-        raise HTTPException(404, f"Task '{task_id}' not found")
-    if task_item.get("status") != 1:
+    if _task_age(task_id) < 10:
         raise HTTPException(409, "Task is not yet complete — poll /v1/fullsong/result/{task_id} until status is 1")
-
-    # Step 2: parse the nested result JSON string and extract the file path
-    raw_result = task_item.get("result")
-    if not isinstance(raw_result, str):
-        raise HTTPException(502, "Unexpected result format from ACE-Step")
-    try:
-        results = json.loads(raw_result)
-    except json.JSONDecodeError:
-        raise HTTPException(502, "Could not parse ACE-Step result JSON")
-
-    if not results or index >= len(results):
-        raise HTTPException(404, f"No audio at index {index} (batch contains {len(results)} file(s))")
-
-    file_url = results[index].get("file", "")
-    if not file_url or "path=" not in file_url:
-        raise HTTPException(502, "No audio file path in ACE-Step result")
-
-    # parse_qs handles URL-decoding, giving us the raw filesystem path
-    qs = urllib.parse.parse_qs(urllib.parse.urlparse(file_url).query)
-    fs_path = qs.get("path", [""])[0]
-    if not fs_path:
-        raise HTTPException(502, "Could not extract audio path from ACE-Step result")
-
-    # Step 3: proxy the audio from ACE-Step — httpx re-encodes the path correctly
-    try:
-        audio_resp = await client.get(f"{ACESTEP_BASE_URL}/v1/audio", params={"path": fs_path})
-    except httpx.ConnectError:
-        raise HTTPException(503, "ACE-Step service unreachable")
-
-    if audio_resp.status_code == 404:
-        raise HTTPException(404, "Audio file not found on ACE-Step server")
-    if audio_resp.status_code != 200:
-        raise HTTPException(502, f"ACE-Step returned {audio_resp.status_code} for audio download")
-
-    ext = Path(fs_path).suffix  # e.g. ".mp3" — taken from the actual saved file
-    return Response(
-        content=audio_resp.content,
-        status_code=200,
-        media_type=audio_resp.headers.get("content-type", "audio/mpeg"),
-        headers={"Content-Disposition": f'attachment; filename="{task_id}{ext}"'},
+    path = _sample("sample.mp3")
+    return FileResponse(
+        str(path),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'attachment; filename="{task_id}.mp3"'},
     )
 
 
 # ---------------------------------------------------------------------------
 # /v1/clip — Foundation-1
 # ---------------------------------------------------------------------------
+
 
 class ClipGenerateRequest(BaseModel):
     """Foundation-1 clip generation request."""
@@ -334,27 +330,15 @@ class ClipGenerateRequest(BaseModel):
     tags=["clip"],
     summary="Submit a clip generation task (Foundation-1)",
 )
-async def clip_generate(req: ClipGenerateRequest, request: Request):
+async def clip_generate(req: ClipGenerateRequest):
     """Submit a MIDI + WAV generation task to Foundation-1.
 
     Returns `{"task_id": "..."}`. Poll `/v1/clip/result/{task_id}` for completion.
     """
     _require("clip")
-    body = req.model_dump_json(exclude_unset=True).encode()
-    try:
-        resp = await request.app.state.http_client.post(
-            f"{FOUNDATION1_BASE_URL}/generate",
-            content=body,
-            headers={"Content-Type": "application/json"},
-        )
-    except httpx.ConnectError:
-        raise HTTPException(503, "Sub-service unreachable — is the model loaded?")
-    return Response(
-        content=resp.content,
-        status_code=resp.status_code,
-        headers={k: v for k, v in resp.headers.items() if k.lower() not in ("transfer-encoding",)},
-        media_type=resp.headers.get("content-type"),
-    )
+    task_id = str(uuid.uuid4())
+    _tasks[task_id] = time.time()
+    return {"task_id": task_id}
 
 
 @app.get(
@@ -362,19 +346,16 @@ async def clip_generate(req: ClipGenerateRequest, request: Request):
     tags=["clip"],
     summary="Poll a clip generation task result",
 )
-async def clip_result(task_id: str, request: Request):
+async def clip_result(task_id: str):
     """Returns task status. When `status == "complete"`, the generation is done.
     Download the output files using the same `task_id`:
     - `GET /v1/clip/audio/{task_id}` → WAV
     - `GET /v1/clip/midi/{task_id}` → MIDI
     """
     _require("clip")
-    try:
-        resp = await request.app.state.http_client.get(f"{FOUNDATION1_BASE_URL}/result/{task_id}")
-    except httpx.ConnectError:
-        raise HTTPException(503, "Foundation-1 service unreachable")
-
-    return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
+    age = _task_age(task_id)
+    status = "complete" if age >= 10 else "pending"
+    return {"task_id": task_id, "status": status}
 
 
 @app.get(
@@ -382,14 +363,11 @@ async def clip_result(task_id: str, request: Request):
     tags=["clip"],
     summary="Download a generated WAV clip",
 )
-async def clip_audio(task_id: str, request: Request):
+async def clip_audio(task_id: str):
     _require("clip")
-    try:
-        resp = await request.app.state.http_client.get(f"{FOUNDATION1_BASE_URL}/audio/{task_id}")
-    except httpx.ConnectError:
-        raise HTTPException(503, "Foundation-1 service unreachable")
-    return Response(content=resp.content, status_code=resp.status_code,
-                    media_type=resp.headers.get("content-type", "audio/wav"))
+    _task_age(task_id)  # raises 404 if unknown
+    path = _sample("clip.wav")
+    return FileResponse(str(path), media_type="audio/wav")
 
 
 @app.get(
@@ -397,19 +375,17 @@ async def clip_audio(task_id: str, request: Request):
     tags=["clip"],
     summary="Download a generated MIDI clip",
 )
-async def clip_midi(task_id: str, request: Request):
+async def clip_midi(task_id: str):
     _require("clip")
-    try:
-        resp = await request.app.state.http_client.get(f"{FOUNDATION1_BASE_URL}/midi/{task_id}")
-    except httpx.ConnectError:
-        raise HTTPException(503, "Foundation-1 service unreachable")
-    return Response(content=resp.content, status_code=resp.status_code,
-                    media_type=resp.headers.get("content-type", "audio/midi"))
+    _task_age(task_id)  # raises 404 if unknown
+    path = _sample("clip.mid")
+    return FileResponse(str(path), media_type="audio/midi")
 
 
 # ---------------------------------------------------------------------------
 # /v1/separator — UVR stem separation
 # ---------------------------------------------------------------------------
+
 
 @app.post(
     "/v1/separator/separate",
@@ -434,26 +410,17 @@ async def separator_separate(
             400,
             f"Unknown model '{model_filename}'. Must be one of: {sorted(ALLOWED_MODELS)}",
         )
-    if model_manager.active_model != "separator":
+    if _active_model != "separator":
         raise HTTPException(
             503,
             {
                 "error": "Separator is not loaded. POST /v1/models/load first.",
                 "hint": '{"model": "separator"}',
-                "active_model": model_manager.active_model,
+                "active_model": _active_model,
             },
         )
-
     task_id = str(uuid.uuid4())
-
-    # Preserve the original file extension so audio-separator names outputs correctly
-    suffix = Path(file.filename or "audio").suffix or ".mp3"
-    upload_path = UPLOAD_DIR / f"{task_id}{suffix}"
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    with upload_path.open("wb") as f_out:
-        shutil.copyfileobj(file.file, f_out)
-
-    separator_runner.submit(task_id, upload_path, model_filename)
+    _tasks[task_id] = time.time()
     return {"task_id": task_id}
 
 
@@ -469,10 +436,17 @@ async def separator_result(task_id: str):
     - `complete` — includes `files`: list of output filenames (download via `/v1/separator/download/{filename}`)
     - `error` — includes `error` message
     """
-    task = separator_runner.get_task(task_id)
-    if task is None:
-        raise HTTPException(404, f"Task '{task_id}' not found")
-    return {"task_id": task_id, **{k: v for k, v in task.items() if k != "created_at"}}
+    age = _task_age(task_id)
+    if age < 10:
+        return {"task_id": task_id, "status": "running"}
+    return {
+        "task_id": task_id,
+        "status": "complete",
+        "files": [
+            f"{task_id}_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3",
+            f"{task_id}_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3",
+        ],
+    }
 
 
 @app.get(
@@ -485,13 +459,14 @@ async def separator_download(filename: str):
 
     `filename` is one of the entries from the `files` list in the result response.
     """
-    # Prevent path traversal
+    if "Vocals" in filename:
+        sample_name = "separator_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3"
+    else:
+        sample_name = "separator_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3"
+    path = _sample(sample_name)
     safe_name = Path(filename).name
-    file_path = OUTPUT_DIR / safe_name
-    if not file_path.is_file():
-        raise HTTPException(404, f"File '{safe_name}' not found")
     return FileResponse(
-        str(file_path),
+        str(path),
         media_type="audio/mpeg",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )
@@ -500,6 +475,7 @@ async def separator_download(filename: str):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main():
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
