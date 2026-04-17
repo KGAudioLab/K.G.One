@@ -23,12 +23,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
+where nvm >nul 2>&1
+if errorlevel 1 (
+    echo   ERROR: nvm not found. Install from https://github.com/coreybutler/nvm-windows/releases
+    exit /b 1
+)
+
 echo   git ... OK
 echo   uv  ... OK
+echo   nvm ... OK
 echo.
 
 :: ---------------------------------------------------------
-echo [1/6] Reading submodules.json...
+echo [1/9] Reading submodules.json...
 :: ---------------------------------------------------------
 
 powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.'ace-step'.url | Out-File -Encoding ASCII '%TEMP%\kg_acestep_url.txt' -NoNewline"
@@ -41,6 +48,9 @@ powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom
 powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.foundation1.commit | Out-File -Encoding ASCII '%TEMP%\kg_f1_commit.txt' -NoNewline"
 powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.'python-audio-separator'.url | Out-File -Encoding ASCII '%TEMP%\kg_sep_url.txt' -NoNewline"
 powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.'python-audio-separator'.commit | Out-File -Encoding ASCII '%TEMP%\kg_sep_commit.txt' -NoNewline"
+powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.kgstudio.url | Out-File -Encoding ASCII '%TEMP%\kg_kgs_url.txt' -NoNewline"
+powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.'soundfont-for-samplers'.url | Out-File -Encoding ASCII '%TEMP%\kg_sf_url.txt' -NoNewline"
+powershell -NoProfile -Command "$j = Get-Content 'submodules.json' | ConvertFrom-Json; $j.'soundfont-for-samplers'.commit | Out-File -Encoding ASCII '%TEMP%\kg_sf_commit.txt' -NoNewline"
 
 set /p ACESTEP_URL=<"%TEMP%\kg_acestep_url.txt"
 set /p ACESTEP_COMMIT=<"%TEMP%\kg_acestep_commit.txt"
@@ -48,7 +58,10 @@ set /p FOUNDATION1_URL=<"%TEMP%\kg_f1_url.txt"
 set /p FOUNDATION1_COMMIT=<"%TEMP%\kg_f1_commit.txt"
 set /p SEP_URL=<"%TEMP%\kg_sep_url.txt"
 set /p SEP_COMMIT=<"%TEMP%\kg_sep_commit.txt"
-del "%TEMP%\kg_acestep_url.txt" "%TEMP%\kg_acestep_commit.txt" "%TEMP%\kg_f1_url.txt" "%TEMP%\kg_f1_commit.txt" "%TEMP%\kg_sep_url.txt" "%TEMP%\kg_sep_commit.txt" >nul 2>&1
+set /p KGSTUDIO_URL=<"%TEMP%\kg_kgs_url.txt"
+set /p SOUNDFONTS_URL=<"%TEMP%\kg_sf_url.txt"
+set /p SOUNDFONTS_COMMIT=<"%TEMP%\kg_sf_commit.txt"
+del "%TEMP%\kg_acestep_url.txt" "%TEMP%\kg_acestep_commit.txt" "%TEMP%\kg_f1_url.txt" "%TEMP%\kg_f1_commit.txt" "%TEMP%\kg_sep_url.txt" "%TEMP%\kg_sep_commit.txt" "%TEMP%\kg_kgs_url.txt" "%TEMP%\kg_sf_url.txt" "%TEMP%\kg_sf_commit.txt" >nul 2>&1
 
 if "%ACESTEP_URL%"=="" (
     echo   ERROR: Could not read from submodules.json
@@ -61,10 +74,13 @@ echo   Foundation-1      URL   : %FOUNDATION1_URL%
 echo   Foundation-1      commit: %FOUNDATION1_COMMIT%
 echo   audio-separator   URL   : %SEP_URL%
 echo   audio-separator   commit: %SEP_COMMIT%
+echo   KGStudio          URL   : %KGSTUDIO_URL%
+echo   soundfont-for-samplers URL   : %SOUNDFONTS_URL%
+echo   soundfont-for-samplers commit: %SOUNDFONTS_COMMIT%
 echo.
 
 :: ---------------------------------------------------------
-echo [2/6] Setting up ACE-Step...
+echo [2/9] Setting up ACE-Step...
 :: ---------------------------------------------------------
 
 if exist "ace-step\.git" goto :acestep_fetch
@@ -91,7 +107,7 @@ echo   ACE-Step OK.
 echo.
 
 :: ---------------------------------------------------------
-echo [3/6] Setting up Foundation-1...
+echo [3/9] Setting up Foundation-1...
 :: ---------------------------------------------------------
 
 if exist "foundation1\.git" goto :f1_fetch
@@ -118,7 +134,7 @@ echo   Foundation-1 OK.
 echo.
 
 :: ---------------------------------------------------------
-echo Setting up python-audio-separator...
+echo [4/9] Setting up python-audio-separator...
 :: ---------------------------------------------------------
 
 if exist "separator\.git" goto :sep_fetch
@@ -145,7 +161,102 @@ echo   python-audio-separator OK.
 echo.
 
 :: ---------------------------------------------------------
-echo [4/6] Setting up Python environments...
+echo [5/9] Setting up KGStudio...
+:: ---------------------------------------------------------
+
+if exist "kgstudio\.git" goto :kgstudio_pull
+echo   Cloning KGStudio...
+git clone "%KGSTUDIO_URL%" kgstudio
+if errorlevel 1 (
+    echo   ERROR: Failed to clone KGStudio
+    exit /b 1
+)
+goto :kgstudio_node
+
+:kgstudio_pull
+echo   Repository exists. Pulling latest...
+git -C kgstudio pull --quiet origin
+
+:kgstudio_node
+echo   Installing Node.js 20.19 (latest patch)...
+nvm install 20.19
+if errorlevel 1 (
+    echo   ERROR: Failed to install Node.js 20.19
+    exit /b 1
+)
+nvm use 20.19
+if errorlevel 1 (
+    echo   ERROR: Failed to activate Node.js 20.19
+    exit /b 1
+)
+:: nvm use updates the symlink but does not update PATH in the current batch session.
+:: Resolve node's directory from nvm root + nvm current and inject it into PATH.
+for /f "usebackq delims=" %%R in (`nvm root`) do set "_NVM_ROOT=%%R"
+for /f "usebackq delims=" %%V in (`nvm current`) do set "_NVM_VER=%%V"
+set "PATH=%_NVM_ROOT%\%_NVM_VER%;%PATH%"
+echo   Installing npm dependencies...
+pushd kgstudio
+echo kgstudio_npm_install_start > "%TEMP%\kginit_trace.txt"
+call npm install --no-audit --no-fund
+set "_EC=%ERRORLEVEL%"
+echo kgstudio_npm_install_exit_%_EC% >> "%TEMP%\kginit_trace.txt"
+echo   [debug] npm install exit code: %_EC%
+if %_EC% neq 0 (
+    popd
+    type "%TEMP%\kginit_trace.txt"
+    echo   ERROR: npm install failed ^(exit code %_EC%^)
+    exit /b 1
+)
+echo   Building KGStudio (tsc + vite build)...
+echo kgstudio_npm_build_start >> "%TEMP%\kginit_trace.txt"
+call npm run build
+set "_EC=%ERRORLEVEL%"
+echo kgstudio_npm_build_exit_%_EC% >> "%TEMP%\kginit_trace.txt"
+echo   [debug] npm run build exit code: %_EC%
+if %_EC% neq 0 (
+    popd
+    type "%TEMP%\kginit_trace.txt"
+    echo   ERROR: npm run build failed ^(exit code %_EC%^)
+    exit /b 1
+)
+popd
+del "%TEMP%\kginit_trace.txt" >nul 2>&1
+if not exist "kgstudio\dist\index.html" (
+    echo   ERROR: Build succeeded but dist\index.html not found
+    exit /b 1
+)
+echo   KGStudio OK.
+echo.
+
+:: ---------------------------------------------------------
+echo [6/9] Setting up soundfonts...
+:: ---------------------------------------------------------
+
+if exist "soundfonts\.git" goto :soundfonts_fetch
+echo   Cloning soundfont-for-samplers (may take several minutes, ~150 MB)...
+git clone "%SOUNDFONTS_URL%" soundfonts
+if errorlevel 1 (
+    echo   ERROR: Failed to clone soundfont-for-samplers
+    exit /b 1
+)
+goto :soundfonts_checkout
+
+:soundfonts_fetch
+echo   Repository exists. Fetching refs...
+git -C soundfonts fetch --quiet origin
+
+:soundfonts_checkout
+echo   Checking out pinned commit %SOUNDFONTS_COMMIT%...
+git -C soundfonts checkout %SOUNDFONTS_COMMIT% --quiet
+if errorlevel 1 (
+    echo   ERROR: Could not checkout soundfont-for-samplers commit %SOUNDFONTS_COMMIT%
+    exit /b 1
+)
+echo   soundfont-for-samplers OK.
+echo.
+
+:: ---------------------------------------------------------
+echo [7/9] Setting up Python environments...
 :: ---------------------------------------------------------
 
 :: Gateway venv
@@ -273,7 +384,7 @@ echo   Separator venv already exists, skipping.
 echo.
 
 :: ---------------------------------------------------------
-echo [5/6] Creating output directories...
+echo [8/9] Creating output directories...
 :: ---------------------------------------------------------
 if not exist "outputs\clip"            mkdir "outputs\clip"
 if not exist "outputs\fullsong"        mkdir "outputs\fullsong"
@@ -285,7 +396,7 @@ echo   Done.
 echo.
 
 :: ---------------------------------------------------------
-echo [6/6] Downloading model weights...
+echo [9/9] Downloading model weights...
 :: ---------------------------------------------------------
 
 :: ACE-Step weights - mirrors what the API server does on first initialize:
@@ -324,16 +435,23 @@ echo   Initialization complete!
 echo ==========================================
 echo.
 echo Start the gateway:
-echo   .venv\Scripts\python.exe main.py
+echo   uv run .\main.py
+echo   uv run .\main.py --host 0.0.0.0          (allow remote access)
+echo   uv run .\main.py --host 0.0.0.0 --port 8080  (custom port)
+echo.
+echo The default browser will open automatically once the server starts.
 echo.
 echo Then load a model:
-echo   POST http://localhost:8000/v1/models/load
+echo   POST http://127.0.0.1:8000/v1/models/load
 echo   Body: {"model": "clip"}     -- Foundation-1 (MIDI + WAV)
 echo   Body: {"model": "fullsong"} -- ACE-Step 1.5 (full songs)
 echo.
 echo Or separate stems (no model load needed):
-echo   POST http://localhost:8000/v1/separator/separate
+echo   POST http://127.0.0.1:8000/v1/separator/separate
 echo   Body: multipart/form-data  file=<audio> model_filename=<model>
 echo.
-echo API docs: http://localhost:8000/docs
+echo K.G.Studio DAW:
+echo   http://127.0.0.1:8000  (redirects to /kgstudio/)
+echo.
+echo API docs: http://127.0.0.1:8000/docs
 echo.

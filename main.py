@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import shutil
+import threading
 import urllib.parse
 import uuid
+import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -15,13 +18,17 @@ import httpx
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from services.model_manager import ModelManager, ModelNotActiveError, model_manager
 from services.acestep_client import ACESTEP_BASE_URL
 from services.foundation1_client import FOUNDATION1_BASE_URL
 from services.separator_runner import ALLOWED_MODELS, OUTPUT_DIR, UPLOAD_DIR, separator_runner
+
+_KGSTUDIO_DIST = Path(__file__).parent / "kgstudio" / "dist"
+_SOUNDFONTS_DIR = Path(__file__).parent / "soundfonts"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,6 +39,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    display_host = getattr(app.state, "display_host", "127.0.0.1")
+    port = getattr(app.state, "port", 8000)
+    url = f"http://{display_host}:{port}/kgstudio/"
+    threading.Timer(1.5, webbrowser.open, args=[url]).start()
     async with httpx.AsyncClient(timeout=300.0) as client:
         app.state.http_client = client
         yield
@@ -51,6 +62,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if _SOUNDFONTS_DIR.is_dir():
+    app.mount("/soundfont-for-samplers", StaticFiles(directory=str(_SOUNDFONTS_DIR)), name="soundfonts")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -506,11 +520,57 @@ async def separator_download(filename: str):
 
 
 # ---------------------------------------------------------------------------
+# /kgstudio — K.G.Studio static SPA
+# ---------------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+async def kgstudio_root_redirect():
+    return RedirectResponse(url="/kgstudio/", status_code=302)
+
+
+@app.get("/kgstudio/{full_path:path}", include_in_schema=False)
+async def kgstudio_spa(full_path: str):
+    candidate = _KGSTUDIO_DIST / full_path
+    if candidate.is_file():
+        return FileResponse(str(candidate))
+    return FileResponse(str(_KGSTUDIO_DIST / "index.html"))
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _write_server_config(port: int) -> None:
+    """Copy kgone-server.json to kgstudio/dist/ with {port} replaced by the actual port."""
+    src = Path(__file__).parent / "kgone-server.json"
+    dst = _KGSTUDIO_DIST / "kgone-server.json"
+    if not src.is_file():
+        logger.warning("kgone-server.json not found — skipping KGStudio config injection")
+        return
+    content = src.read_text(encoding="utf-8").replace("{port}", str(port))
+    dst.write_text(content, encoding="utf-8")
+    logger.info("Wrote %s", dst)
+
+
 def main():
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    parser = argparse.ArgumentParser(description="KGOne Gateway")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Host to bind (default: 127.0.0.1; use 0.0.0.0 for remote access)")
+    parser.add_argument("--port", type=int, default=8000,
+                        help="Port to bind (default: 8000)")
+    args = parser.parse_args()
+
+    display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    app.state.host = args.host
+    app.state.port = args.port
+    app.state.display_host = display_host
+
+    _write_server_config(args.port)
+
+    print(f"\nK.G.Studio: http://{display_host}:{args.port}/kgstudio/")
+    print(f"API docs:   http://{display_host}:{args.port}/docs\n")
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

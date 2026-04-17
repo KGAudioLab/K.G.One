@@ -1,0 +1,4 @@
+{
+    "base_url": "http://127.0.0.1:{port}",
+    "soundfont": "http://127.0.0.1:{port}/soundfont-for-samplers/FluidR3_GM/"
+}

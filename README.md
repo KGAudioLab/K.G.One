@@ -631,3 +631,27 @@ curl -X POST http://localhost:8000/v1/models/load \
   }
 }
 ```
+
+---
+
+## License
+
+K.G.One is licensed under the [Apache License 2.0](./LICENSE) with two supplemental conditions:
+
+- **No patents** — this software may not be used to file or support any patent application in any jurisdiction.
+- **Attribution** — public or commercial deployments must display `Powered by K.G.One © 2026 Xiaohan Tian` in a prominent location visible to end users.
+
+### Third-party component licenses
+
+K.G.One integrates or proxies the following projects. If you use the corresponding features, you are responsible for complying with their licenses.
+
+| Component | Used for | License | Notes |
+|-----------|----------|---------|-------|
+| [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio) | Browser DAW UI | Apache 2.0 + custom terms | Public/commercial use requires displaying `Powered by K.G.Studio © 2025 Xiaohan Tian`; no patent filing permitted |
+| [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) | Full-song generation (`/v1/fullsong/*`) | MIT | Permissive — attribution required |
+| [stable-audio-open-1.0](https://huggingface.co/stabilityai/stable-audio-open-1.0) | Clip generation (`/v1/clip/*`) via Foundation-1 | Stability AI Community License | **Non-commercial only.** Commercial use requires a separate license from Stability AI — see [stability.ai/license](https://stability.ai/license) |
+| [python-audio-separator / UVR5](https://github.com/nomadkaraoke/python-audio-separator) | Stem separation (`/v1/separator/*`) | MIT | Permissive — attribution required |
+
+> **Note:** The `clip` generation feature is powered by a model released under the Stability AI Community License, which **does not permit commercial use**. If you intend to use K.G.One in a commercial product, you must obtain a commercial license from Stability AI before enabling or exposing the `/v1/clip/*` endpoints.
+
+See [LICENSE](./LICENSE) for the full terms including third-party notices.

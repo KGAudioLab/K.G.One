@@ -10,6 +10,8 @@ echo   .venv\       (gateway Python environment)
 echo   ace-step\    (submodule + venv + model checkpoints)
 echo   foundation1\ (submodule + venv + model weights)
 echo   separator\   (submodule + venv)
+echo   kgstudio\    (frontend repo + node_modules + dist)
+echo   soundfonts\  (soundfont-for-samplers MP3 samples, ~150 MB)
 echo   outputs\     (all generated audio and MIDI files)
 echo   uploads\     (all uploaded audio files)
 echo.
@@ -53,6 +55,22 @@ if exist "separator" (
     echo   Done.
 ) else (
     echo separator not found, skipping.
+)
+
+if exist "kgstudio" (
+    echo Removing kgstudio ...
+    rmdir /s /q "kgstudio"
+    echo   Done.
+) else (
+    echo kgstudio not found, skipping.
+)
+
+if exist "soundfonts" (
+    echo Removing soundfonts ...
+    rmdir /s /q "soundfonts"
+    echo   Done.
+) else (
+    echo soundfonts not found, skipping.
 )
 
 if exist "outputs" (

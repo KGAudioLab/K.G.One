@@ -16,5 +16,16 @@
     "commit": "0a644dbb07d94a7e747d5265e3abbaf600459449",
     "description": "fix: synchronous endpoint + Cloud Run scaling (2026-03-26)",
     "dir": "separator"
+  },
+  "kgstudio": {
+    "url": "https://github.com/KGAudioLab/K.G.Studio.git",
+    "description": "K.G.Studio browser DAW frontend (always latest main)",
+    "dir": "kgstudio"
+  },
+  "soundfont-for-samplers": {
+    "url": "https://github.com/KGAudioLab/soundfont-for-samplers.git",
+    "commit": "9281ba35c0bd8d24c881009f36b5766bc74b15ee",
+    "description": "FluidR3_GM soundfont MP3 samples for KGStudio MIDI playback",
+    "dir": "soundfonts"
   }
 }
