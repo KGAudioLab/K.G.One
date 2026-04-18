@@ -99,6 +99,7 @@ class ModelManager:
         venv_python = _python_exe(ROOT_DIR / "ace-step" / ".venv")
         cmd = [str(venv_python), "-c", "from acestep.api_server import main; main()"]
         env = {**os.environ, "ACESTEP_API_PORT": str(self.acestep_port)}
+        env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B")
         logger.info("Launching ACE-Step on port %d: %s", self.acestep_port, " ".join(cmd))
         return subprocess.Popen(cmd, cwd=str(ROOT_DIR / "ace-step"), env=env)
 
