@@ -23,9 +23,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from services.model_manager import ModelManager, ModelNotActiveError, model_manager
-from services.acestep_client import ACESTEP_BASE_URL
-from services.foundation1_client import FOUNDATION1_BASE_URL
+from services.acestep_client import ACESTEP_BASE_URL as _ACESTEP_BASE_URL_DEFAULT
+from services.foundation1_client import FOUNDATION1_BASE_URL as _FOUNDATION1_BASE_URL_DEFAULT
 from services.separator_runner import ALLOWED_MODELS, OUTPUT_DIR, UPLOAD_DIR, separator_runner
+
+ACESTEP_BASE_URL: str = _ACESTEP_BASE_URL_DEFAULT
+FOUNDATION1_BASE_URL: str = _FOUNDATION1_BASE_URL_DEFAULT
 
 _KGSTUDIO_DIST = Path(__file__).parent / "kgstudio" / "dist"
 _SOUNDFONTS_DIR = Path(__file__).parent / "soundfonts"
@@ -553,12 +556,23 @@ def _write_server_config(port: int) -> None:
 
 
 def main():
+    global ACESTEP_BASE_URL, FOUNDATION1_BASE_URL
+
     parser = argparse.ArgumentParser(description="KGOne Gateway")
     parser.add_argument("--host", default="127.0.0.1",
                         help="Host to bind (default: 127.0.0.1; use 0.0.0.0 for remote access)")
     parser.add_argument("--port", type=int, default=8000,
                         help="Port to bind (default: 8000)")
+    parser.add_argument("--fullsong-service-port", type=int, default=8001,
+                        help="Port for the ACE-Step fullsong service (default: 8001)")
+    parser.add_argument("--clip-service-port", type=int, default=8002,
+                        help="Port for the Foundation-1 clip service (default: 8002)")
     args = parser.parse_args()
+
+    ACESTEP_BASE_URL = f"http://127.0.0.1:{args.fullsong_service_port}"
+    FOUNDATION1_BASE_URL = f"http://127.0.0.1:{args.clip_service_port}"
+    model_manager.acestep_port = args.fullsong_service_port
+    model_manager.foundation1_port = args.clip_service_port
 
     display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
     app.state.host = args.host
