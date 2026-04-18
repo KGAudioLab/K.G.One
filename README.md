@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-green.svg)
 
 <!-- IMAGE: hero screenshot of K.G.Studio DAW with the K.G.One Music Generator panel open, showing a clip generation result loaded into a track -->
@@ -51,11 +51,12 @@ K.G.One manages a single NVIDIA GPU across all three AI services. When you switc
 
 | Requirement | Notes |
 |-------------|-------|
-| Windows 10/11 | `init.bat` is Windows-only; Linux/macOS support can be added |
+| Windows 10/11 or Linux | Use `init.bat` on Windows, `init.sh` on Linux |
 | NVIDIA GPU | CUDA required for all AI models |
 | [Git](https://git-scm.com/downloads) | For cloning sub-projects |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | Python environment manager |
-| [nvm-windows](https://github.com/coreybutler/nvm-windows/releases) | Node.js version manager (for building K.G.Studio) |
+| nvm ([Windows](https://github.com/coreybutler/nvm-windows/releases) / [Linux](https://github.com/nvm-sh/nvm)) | Node.js version manager (for building K.G.Studio) |
+| [jq](https://jqlang.org/download/) | JSON parser — Linux only (e.g. `sudo apt install jq`) |
 | Python 3.10 | Required by Foundation-1; ACE-Step works with 3.10+ |
 
 ---
@@ -64,7 +65,7 @@ K.G.One manages a single NVIDIA GPU across all three AI services. When you switc
 
 ### 1. Initialize
 
-Run `init.bat` from the project root. It will:
+Run the init script from the project root. It will:
 
 1. Read pinned commit hashes and URLs from `submodules.json`
 2. Clone (or update) ACE-Step 1.5 → `ace-step/`
@@ -80,37 +81,56 @@ Run `init.bat` from the project root. It will:
 8. Create output and upload directories
 9. Download ACE-Step and Foundation-1 model weights
 
+**Windows:**
 ```bat
 init.bat
+```
+
+**Linux:**
+```bash
+./init.sh
 ```
 
 > **Note:** The first run downloads large runtime packages and model weights (several GB total). How long it takes depends on your network speed and machine — subsequent runs skip already-completed steps.
 
 To use a local Foundation-1 checkpoint instead of downloading from HuggingFace:
 
+**Windows:**
 ```bat
 set FOUNDATION1_CKPT_PATH=C:\path\to\foundation1.safetensors
 set FOUNDATION1_CONFIG_PATH=C:\path\to\model_config.json
 ```
 
+**Linux:**
+```bash
+export FOUNDATION1_CKPT_PATH=/path/to/foundation1.safetensors
+export FOUNDATION1_CONFIG_PATH=/path/to/model_config.json
+```
+
 ### 2. Start K.G.One Studio
 
+**Windows:**
 ```bat
 uv run .\main.py
+```
+
+**Linux:**
+```bash
+uv run ./main.py
 ```
 
 The server starts on `http://localhost:8000` and automatically opens K.G.Studio in your browser.
 
 To allow access from other devices on your network:
 
-```bat
-uv run .\main.py --host 0.0.0.0
-uv run .\main.py --host 0.0.0.0 --port 8080
+```bash
+uv run ./main.py --host 0.0.0.0
+uv run ./main.py --host 0.0.0.0 --port 8080
 ```
 
 ### Upgrading a pinned dependency
 
-Edit the `commit` field in `submodules.json`, delete the corresponding subfolder, then re-run `init.bat`.
+Edit the `commit` field in `submodules.json`, delete the corresponding subfolder, then re-run `init.bat` (Windows) or `./init.sh` (Linux).
 
 ---
 
@@ -149,6 +169,7 @@ If you want to call the AI features programmatically, integrate K.G.One into you
 K.G.One/
 ├── submodules.json          # Pinned commits — source of truth for dependency versions
 ├── init.bat                 # Windows bootstrap script
+├── init.sh                  # Linux bootstrap script
 ├── pyproject.toml           # K.G.One Python project
 ├── main.py                  # K.G.One FastAPI server (port 8000); serves K.G.Studio at /kgstudio/
 ├── services/
