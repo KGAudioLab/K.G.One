@@ -14,6 +14,22 @@ import httpx
 
 ROOT_DIR = Path(__file__).parent.parent
 
+
+def _load_dotenv(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    result: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key and value:
+            result[key] = value
+    return result
+
 ACESTEP_PORT = 8001
 FOUNDATION1_PORT = 8002
 HEALTH_POLL_INTERVAL = 2.0
@@ -98,8 +114,14 @@ class ModelManager:
     def _launch_acestep(self) -> subprocess.Popen:
         venv_python = _python_exe(ROOT_DIR / "ace-step" / ".venv")
         cmd = [str(venv_python), "-c", "from acestep.api_server import main; main()"]
-        env = {**os.environ, "ACESTEP_API_PORT": str(self.acestep_port)}
-        env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B")
+        dotenv_vars = _load_dotenv(ROOT_DIR / ".env")
+        env = {**os.environ, **dotenv_vars, "ACESTEP_API_PORT": str(self.acestep_port)}
+        if dotenv_vars:
+            logger.info("ACE-Step env vars from .env:")
+            for k, v in dotenv_vars.items():
+                logger.info("  %s=%s", k, v)
+        else:
+            logger.info("No .env file found; no extra env vars applied to ACE-Step.")
         logger.info("Launching ACE-Step on port %d: %s", self.acestep_port, " ".join(cmd))
         return subprocess.Popen(cmd, cwd=str(ROOT_DIR / "ace-step"), env=env)
 

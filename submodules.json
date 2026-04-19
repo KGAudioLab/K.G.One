@@ -1,8 +1,8 @@
 {
   "ace-step": {
     "url": "https://github.com/ace-step/ACE-Step-1.5.git",
-    "commit": "2d14b9e070aff945fd8b3dc3491a4386b91702a6",
-    "description": "Merge PR #793 feat/jetson-docker-support (2026-03-08)",
+    "commit": "2e786dcfccaecf0666ddf4337d02c89c11c91ef2",
+    "description": "v0.1.6 XL series 4B DiT decoder (2026-04-03)",
     "dir": "ace-step"
   },
   "foundation1": {
