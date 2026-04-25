@@ -6,6 +6,12 @@ Place sample files in ./samples/ before starting:
   clip.mid
   separator_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3
   separator_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3
+  KGOne_Stem_Bass_Sample.mp3
+  KGOne_Stem_Drums_Sample.mp3
+  KGOne_Stem_Guitar_Sample.mp3
+  KGOne_Stem_Other_Sample.mp3
+  KGOne_Stem_Piano_Sample.mp3
+  KGOne_Stem_Vocals_Sample.mp3
 
 Run:
   uv sync
@@ -46,7 +52,7 @@ ALLOWED_MODELS = {
 # ---------------------------------------------------------------------------
 
 _active_model: Optional[str] = None
-_tasks: dict[str, float] = {}  # task_id -> unix timestamp of creation
+_tasks: dict[str, dict] = {}  # task_id -> {"created_at": float, "model_filename": str | None}
 
 # ---------------------------------------------------------------------------
 # App
@@ -92,10 +98,10 @@ def _sample(filename: str) -> Path:
 
 def _task_age(task_id: str) -> float:
     """Return seconds since this task was created, or raise 404 if unknown."""
-    created_at = _tasks.get(task_id)
-    if created_at is None:
+    task_info = _tasks.get(task_id)
+    if task_info is None:
         raise HTTPException(404, f"Task '{task_id}' not found")
-    return time.time() - created_at
+    return time.time() - task_info["created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +197,7 @@ async def fullsong_generate(req: FullsongGenerateRequest):
     """
     _require("fullsong")
     task_id = str(uuid.uuid4())
-    _tasks[task_id] = time.time()
+    _tasks[task_id] = {"created_at": time.time(), "model_filename": None}
     return {
         "data": {
             "task_id": task_id,
@@ -225,7 +231,7 @@ async def fullsong_result(task_id: str):
             "file": "",
             "wave": "",
             "status": 0,
-            "create_time": int(_tasks[task_id]),
+            "create_time": int(_tasks[task_id]["created_at"]),
             "env": "development",
             "progress": min(0.9, age / 10),
             "stage": "Phase 1: Generating CoT metadata (once for all items)...",
@@ -247,7 +253,7 @@ async def fullsong_result(task_id: str):
         "file": "/v1/audio?path=mock",
         "wave": "",
         "status": 1,
-        "create_time": int(_tasks[task_id]),
+        "create_time": int(_tasks[task_id]["created_at"]),
         "env": "development",
         "progress": 1.0,
         "stage": "succeeded",
@@ -345,7 +351,7 @@ async def clip_generate(req: ClipGenerateRequest):
     """
     _require("clip")
     task_id = str(uuid.uuid4())
-    _tasks[task_id] = time.time()
+    _tasks[task_id] = {"created_at": time.time(), "model_filename": None}
     return {"task_id": task_id}
 
 
@@ -428,7 +434,7 @@ async def separator_separate(
             },
         )
     task_id = str(uuid.uuid4())
-    _tasks[task_id] = time.time()
+    _tasks[task_id] = {"created_at": time.time(), "model_filename": model_filename}
     return {"task_id": task_id}
 
 
@@ -447,13 +453,28 @@ async def separator_result(task_id: str):
     age = _task_age(task_id)
     if age < 10:
         return {"task_id": task_id, "status": "running"}
+    
+    model_filename = _tasks[task_id]["model_filename"]
+    
+    if model_filename == "htdemucs_6s.yaml":
+        files = [
+            f"{task_id}_(Bass)_htdemucs_6s.mp3",
+            f"{task_id}_(Drums)_htdemucs_6s.mp3",
+            f"{task_id}_(Guitar)_htdemucs_6s.mp3",
+            f"{task_id}_(Other)_htdemucs_6s.mp3",
+            f"{task_id}_(Piano)_htdemucs_6s.mp3",
+            f"{task_id}_(Vocals)_htdemucs_6s.mp3",
+        ]
+    else:
+        files = [
+            f"{task_id}_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3",
+            f"{task_id}_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3",
+        ]
+    
     return {
         "task_id": task_id,
         "status": "complete",
-        "files": [
-            f"{task_id}_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3",
-            f"{task_id}_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3",
-        ],
+        "files": files,
     }
 
 
@@ -467,7 +488,19 @@ async def separator_download(filename: str):
 
     `filename` is one of the entries from the `files` list in the result response.
     """
-    if "Vocals" in filename:
+    if "(Bass)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Bass_Sample.mp3"
+    elif "(Drums)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Drums_Sample.mp3"
+    elif "(Guitar)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Guitar_Sample.mp3"
+    elif "(Other)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Other_Sample.mp3"
+    elif "(Piano)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Piano_Sample.mp3"
+    elif "(Vocals)_htdemucs_6s" in filename:
+        sample_name = "KGOne_Stem_Vocals_Sample.mp3"
+    elif "(Vocals)" in filename:
         sample_name = "separator_(Vocals)_MDX23C-8KFFT-InstVoc_HQ.mp3"
     else:
         sample_name = "separator_(Instrumental)_MDX23C-8KFFT-InstVoc_HQ.mp3"
