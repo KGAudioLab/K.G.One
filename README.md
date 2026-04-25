@@ -1,4 +1,8 @@
-# K.G.One Studio
+<div align="center">
+  <img src="./res/KGOne-logo.png" alt="K.G.One Logo" width="160" />
+</div>
+
+# K.G.One Music Studio
 
 > **AI-native music creation. Compose, generate, and produce — right in your browser.**
 
@@ -11,9 +15,9 @@
 
 ---
 
-## What is K.G.One Studio?
+## What is K.G.One Music Studio?
 
-**K.G.One Studio** is an AI-powered music production platform — think Cursor, but for making music. It pairs [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio), a lightweight browser-based DAW, with **K.G.One**, a local AI backend that brings real generative AI capabilities to your workflow.
+**K.G.One Music Studio** is an AI-powered music production platform — think Cursor, but for making music. It pairs [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio), a lightweight browser-based DAW, with **K.G.One**, a local AI backend that brings real generative AI capabilities to your workflow.
 
 No heavy software to install. Open K.G.Studio in any modern browser, point it at your K.G.One server, and you can generate full songs from text, produce MIDI clips and WAV loops, or strip apart any track into clean stems — all without leaving the browser.
 
@@ -23,15 +27,14 @@ Both K.G.Studio and K.G.One are built by the same author.
 
 ---
 
-## Platform Capabilities
+## Components
 
-| What you can do | Powered by | Output | Port |
-|-----------------|-----------|--------|------|
-| **Compose and edit in the browser DAW** | [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio) | MIDI, Audio tracks, Project files | `/kgstudio/` |
-| **Generate a full song from text** | [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) | Full-length music (MP3/WAV/FLAC) | 8001 (internal) |
-| **Generate MIDI clips + WAV loops from text** | [Foundation-1](https://huggingface.co/RoyalCities/Foundation-1) | WAV audio + MIDI transcription | 8002 (internal) |
-| **Separate stems from any audio** | [python-audio-separator](https://github.com/nomadkaraoke/python-audio-separator) | Vocals, Instrumental, and more (MP3) | CLI (no port) |
-| **K.G.One Server** | FastAPI | Routes all AI requests | **8000** (public) |
+| | Component | Capabilities |
+|--|-----------|-------------|
+| <img src="./res/banners/kgstudio.png" width="210"> | [**K.G.Studio**](https://github.com/KGAudioLab/K.G.Studio) | Browser-based DAW — compose, edit, and produce in any modern browser |
+| <img src="./res/banners/acestep.png" width="210"> | [**ACE-Step 1.5**](https://github.com/ace-step/ACE-Step-1.5) | Generate full-length songs from text prompts |
+| <img src="./res/banners/foundation1.png" width="210"> | [**Foundation-1**](https://huggingface.co/RoyalCities/Foundation-1) | Generate instrument clips and MIDI loops from text |
+| <img src="./res/banners/uvr5.png" width="210"> | [**python-audio-separator**](https://github.com/nomadkaraoke/python-audio-separator) | Separate any audio into vocals, instrumental, and more |
 
 > **Note:** All AI models require a GPU. Only one model can be active at a time — you switch explicitly via `POST /v1/models/load`.
 
@@ -107,7 +110,7 @@ export FOUNDATION1_CKPT_PATH=/path/to/foundation1.safetensors
 export FOUNDATION1_CONFIG_PATH=/path/to/model_config.json
 ```
 
-### 2. Start K.G.One Studio
+### 2. Start K.G.One Music Studio
 
 **Windows:**
 ```bat
@@ -134,11 +137,11 @@ Edit the `commit` field in `submodules.json`, delete the corresponding subfolder
 
 ---
 
-## Using K.G.One Studio
+## Using K.G.One Music Studio
 
 <!-- IMAGE: screenshot of K.G.Studio showing the K.G.One Music Generator panel — loading a model and triggering a clip generation -->
 
-**K.G.Studio is the recommended way to use K.G.One Studio.** It opens automatically in your browser when the server starts and covers every capability through a visual interface.
+**K.G.Studio is the recommended way to use K.G.One Music Studio.** It opens automatically in your browser when the server starts and covers every capability through a visual interface.
 
 **K.G.One Music Generator panel** (requires K.G.One server):
 - **Generate a full song** — describe the mood, genre, and style; get back a full-length audio track
@@ -198,7 +201,7 @@ K.G.One/
 
 ## Contributing
 
-K.G.One Studio is an experimental, actively evolving project — contributions are very welcome! Whether you're a developer, musician, or designer, your expertise can make a real difference.
+K.G.One Music Studio is an experimental, actively evolving project — contributions are very welcome! Whether you're a developer, musician, or designer, your expertise can make a real difference.
 
 ### How You Can Help
 
@@ -232,14 +235,14 @@ No contribution is too small — from reporting bugs to suggesting new features,
 
 ## License
 
-K.G.One Studio is licensed under the [Apache License 2.0](./LICENSE) with two supplemental conditions:
+K.G.One Music Studio is licensed under the [Apache License 2.0](./LICENSE) with two supplemental conditions:
 
 - **No patents** — this software may not be used to file or support any patent application in any jurisdiction.
 - **Attribution** — public or commercial deployments must display `Powered by K.G.One © 2026 Xiaohan Tian` in a prominent location visible to end users.
 
 ### Third-party component licenses
 
-K.G.One Studio integrates or proxies the following projects. If you use the corresponding features, you are responsible for complying with their licenses.
+K.G.One Music Studio integrates or proxies the following projects. If you use the corresponding features, you are responsible for complying with their licenses.
 
 | Component | Used for | License | Notes |
 |-----------|----------|---------|-------|
@@ -248,6 +251,6 @@ K.G.One Studio integrates or proxies the following projects. If you use the corr
 | [stable-audio-open-1.0](https://huggingface.co/stabilityai/stable-audio-open-1.0) | Clip generation (`/v1/clip/*`) via Foundation-1 | Stability AI Community License | **Non-commercial only.** Commercial use requires a separate license from Stability AI — see [stability.ai/license](https://stability.ai/license) |
 | [python-audio-separator / UVR5](https://github.com/nomadkaraoke/python-audio-separator) | Stem separation (`/v1/separator/*`) | MIT | Permissive — attribution required |
 
-> **Note:** The `clip` generation feature is powered by a model released under the Stability AI Community License, which **does not permit commercial use**. If you intend to use K.G.One Studio in a commercial product, you must obtain a commercial license from Stability AI before enabling or exposing the `/v1/clip/*` endpoints.
+> **Note:** The `clip` generation feature is powered by a model released under the Stability AI Community License, which **does not permit commercial use**. If you intend to use K.G.One Music Studio in a commercial product, you must obtain a commercial license from Stability AI before enabling or exposing the `/v1/clip/*` endpoints.
 
 See [LICENSE](./LICENSE) for the full terms including third-party notices.
