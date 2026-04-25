@@ -11,19 +11,21 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 ![GPU](https://img.shields.io/badge/GPU-NVIDIA%20CUDA-green.svg)
 
-<!-- IMAGE: hero screenshot of K.G.Studio DAW with the K.G.One Music Generator panel open, showing a clip generation result loaded into a track -->
+<div align="center">
+  <img src="./res/KGOne-Demo-GIF.gif" alt="K.G.One Logo" width="640" />
+</div>
 
 ---
 
 ## What is K.G.One Music Studio?
 
-**K.G.One Music Studio** is an AI-powered music production platform — think Cursor, but for making music. It pairs [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio), a lightweight browser-based DAW, with **K.G.One**, a local AI backend that brings real generative AI capabilities to your workflow.
+**K.G.One Music Studio** is an AI-powered music production platform built entirely on open-source software. It combines [K.G.Studio](https://github.com/KGAudioLab/K.G.Studio), a lightweight browser-based DAW, with **K.G.One**, a local AI backend that brings generative music tools into your workflow.
 
-No heavy software to install. Open K.G.Studio in any modern browser, point it at your K.G.One server, and you can generate full songs from text, produce MIDI clips and WAV loops, or strip apart any track into clean stems — all without leaving the browser.
+Every integrated component is open source, and the full stack can run locally on your own machine. Open K.G.Studio in any modern browser, connect it to your K.G.One server, and you can generate full songs from text, produce MIDI clips and WAV loops, or separate a track into clean stems without leaving the browser.
 
 K.G.Studio ships with a built-in **AI Musician Assistant** for harmony, arrangement, and note editing through natural conversation. K.G.One extends the DAW with a dedicated **K.G.One Music Generator** panel — GPU-accelerated tools for generating full songs, producing MIDI clips, and separating stems, all accessible directly from the browser interface.
 
-Both K.G.Studio and K.G.One are built by the same author.
+Both **K.G.Studio** and **K.G.One Music Studio** are built by the same author. K.G.One Music Studio also integrates three open-source third-party components: **ACE-Step 1.5** for full-song generation, **Foundation-1** for audio clip generation, and **python-audio-separator** for stem separation.
 
 ---
 
@@ -36,17 +38,17 @@ Both K.G.Studio and K.G.One are built by the same author.
 | <img src="./res/banners/foundation1.png" width="210"> | [**Foundation-1**](https://huggingface.co/RoyalCities/Foundation-1) | Generate instrument clips and MIDI loops from text |
 | <img src="./res/banners/uvr5.png" width="210"> | [**python-audio-separator**](https://github.com/nomadkaraoke/python-audio-separator) | Separate any audio into vocals, instrumental, and more |
 
-> **Note:** All AI models require a GPU. Only one model can be active at a time — you switch explicitly via `POST /v1/models/load`.
+> **Note:** All AI models require a CUDA-enabled GPU. Apple Silicon support is coming soon.
 
 ---
 
 ## How It Works
 
-<!-- IMAGE: architecture diagram showing browser → K.G.Studio UI → K.G.One server (port 8000) → AI models (ACE-Step 8001, Foundation-1 8002, audio-separator CLI) with GPU mutex illustrated -->
+K.G.One Music Studio is built from five parts: K.G.Studio, K.G.One, ACE-Step 1.5, Foundation-1, and python-audio-separator.
 
-K.G.Studio runs entirely in the browser — it stores your projects locally and never requires a server to use as a standalone DAW. When you connect it to K.G.One, the **K.G.One Music Generator** panel unlocks inside K.G.Studio, letting you generate full songs, produce MIDI clips, and separate stems without leaving your session.
+**K.G.Studio** is the main interface. It runs entirely in the browser, stores projects locally, and can be used as a standalone DAW without any server. You can try it here: [https://kgaudiolab.github.io/kgstudio/](https://kgaudiolab.github.io/kgstudio/). It also includes an AI Musician Assistant for harmony, arrangement, and note editing through natural-language interaction. That assistant requires access to a modern LLM, which can also be hosted locally with open-source tools such as Ollama, vLLM, or llama.cpp. Model quality and editing performance can vary significantly, and not all models perform equally well. For local hosting, we recommend **qwen3.5-35b-a3b**. Additional recommended commercial and free LLM options are listed in the [K.G.Studio README](https://github.com/KGAudioLab/K.G.Studio). When K.G.Studio connects to a K.G.One server, the **K.G.One Music Generator** panel becomes available inside the DAW, so song generation, clip generation, and stem separation stay part of the same workflow.
 
-K.G.One manages a single NVIDIA GPU across all three AI services. When you switch models via the API, the active service is shut down before the next one loads. This keeps VRAM clean and prevents conflicts between the very different dependency stacks each model requires.
+**K.G.One** provides a single local API layer between K.G.Studio and the three integrated AI services. It routes requests to the correct backend, manages model startup and shutdown, and keeps the browser interface consistent across different generation tasks. When you switch models through the API, K.G.One stops the active service before loading the next one. This helps free GPU memory and avoids conflicts between services with different runtime dependencies.
 
 ---
 
@@ -55,7 +57,7 @@ K.G.One manages a single NVIDIA GPU across all three AI services. When you switc
 | Requirement | Notes |
 |-------------|-------|
 | Windows 10/11 or Linux | Use `init.bat` on Windows, `init.sh` on Linux |
-| NVIDIA GPU | CUDA required for all AI models |
+| NVIDIA GPU | CUDA required for all AI models (VRAM >= 8GB), Apple Silicon support is coming soon. |
 | [Git](https://git-scm.com/downloads) | For cloning sub-projects |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | Python environment manager |
 | nvm ([Windows](https://github.com/coreybutler/nvm-windows/releases) / [Linux](https://github.com/nvm-sh/nvm)) | Node.js version manager (for building K.G.Studio) |
@@ -96,20 +98,6 @@ init.bat
 
 > **Note:** The first run downloads large runtime packages and model weights (several GB total). How long it takes depends on your network speed and machine — subsequent runs skip already-completed steps.
 
-To use a local Foundation-1 checkpoint instead of downloading from HuggingFace:
-
-**Windows:**
-```bat
-set FOUNDATION1_CKPT_PATH=C:\path\to\foundation1.safetensors
-set FOUNDATION1_CONFIG_PATH=C:\path\to\model_config.json
-```
-
-**Linux:**
-```bash
-export FOUNDATION1_CKPT_PATH=/path/to/foundation1.safetensors
-export FOUNDATION1_CONFIG_PATH=/path/to/model_config.json
-```
-
 ### 2. Start K.G.One Music Studio
 
 **Windows:**
@@ -131,15 +119,9 @@ uv run ./main.py --host 0.0.0.0
 uv run ./main.py --host 0.0.0.0 --port 8080
 ```
 
-### Upgrading a pinned dependency
-
-Edit the `commit` field in `submodules.json`, delete the corresponding subfolder, then re-run `init.bat` (Windows) or `./init.sh` (Linux).
-
 ---
 
 ## Using K.G.One Music Studio
-
-<!-- IMAGE: screenshot of K.G.Studio showing the K.G.One Music Generator panel — loading a model and triggering a clip generation -->
 
 **K.G.Studio is the recommended way to use K.G.One Music Studio.** It opens automatically in your browser when the server starts and covers every capability through a visual interface.
 
@@ -148,7 +130,7 @@ Edit the `commit` field in `submodules.json`, delete the corresponding subfolder
 - **Generate MIDI clips + WAV loops** — produce instrument loops that land directly on your tracks, ready to edit in the piano roll
 - **Separate stems** — split any audio file into vocals, instrumentals, or individual instruments
 
-**K.G.Studio Musician Assistant** (works standalone, no K.G.One needed):
+**K.G.Studio Musician Assistant** (works standalone, no K.G.One needed, requires an external LLM service):
 - Arrange, edit, and compose using the AI chat panel — describe what you want and the assistant makes edits directly in the project
 
 > AI generation tools (full song, clip, stem separation) will be integrated into the Musician Assistant in a future release.
@@ -163,39 +145,6 @@ If you want to call the AI features programmatically, integrate K.G.One into you
 
 - **[API Reference →](./docs/API.md)** — full REST API documentation with request/response examples for all endpoints
 - **Interactive Swagger UI** — `http://localhost:8000/docs` (available while the server is running)
-
----
-
-## Project Structure
-
-```
-K.G.One/
-├── submodules.json          # Pinned commits — source of truth for dependency versions
-├── init.bat                 # Windows bootstrap script
-├── init.sh                  # Linux bootstrap script
-├── pyproject.toml           # K.G.One Python project
-├── main.py                  # K.G.One FastAPI server (port 8000); serves K.G.Studio at /kgstudio/
-├── services/
-│   ├── model_manager.py     # GPU mutex — starts/stops AI model subprocesses
-│   ├── acestep_client.py    # ACE-Step connection config
-│   ├── foundation1_client.py# Foundation-1 connection config
-│   └── separator_runner.py  # Runs audio-separator CLI per-request, manages tasks
-├── foundation1_server/
-│   └── server.py            # Foundation-1 FastAPI wrapper (port 8002)
-├── kgstudio/                # K.G.Studio browser DAW — built as a static SPA, served at /kgstudio/
-├── ace-step/                # Cloned by init.bat — ACE-Step 1.5 source
-├── foundation1/             # Cloned by init.bat — RC-stable-audio-tools source
-├── separator/               # Cloned by init.bat — python-audio-separator source + venv
-├── soundfonts/              # Cloned by init.bat — soundfont samples for K.G.Studio
-├── docs/
-│   └── API.md               # Full REST API reference
-├── outputs/
-│   ├── clip/                # Foundation-1 generated WAV + MIDI files
-│   ├── fullsong/            # (reserved for ACE-Step output references)
-│   └── separator/           # Separated stem MP3 files
-└── uploads/
-    └── separator/           # Temporary upload storage (auto-deleted after processing)
-```
 
 ---
 
