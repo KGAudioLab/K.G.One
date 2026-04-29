@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import shutil
+import tempfile
 import threading
 import urllib.parse
 import uuid
@@ -197,6 +198,80 @@ async def fullsong_generate(req: FullsongGenerateRequest, request: Request):
             f"{ACESTEP_BASE_URL}/release_task",
             content=body,
             headers={"Content-Type": "application/json"},
+        )
+    except httpx.ConnectError:
+        raise HTTPException(503, "Sub-service unreachable — is the model loaded?")
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers={k: v for k, v in resp.headers.items() if k.lower() not in ("transfer-encoding",)},
+        media_type=resp.headers.get("content-type"),
+    )
+
+
+@app.post(
+    "/v1/fullsong/remix",
+    tags=["fullsong"],
+    summary="Submit a remix/cover task (ACE-Step 1.5)",
+)
+async def fullsong_remix(
+    request: Request,
+    audio_file: UploadFile = File(...),
+    caption: Optional[str] = Form(None),
+    lyrics: Optional[str] = Form(None),
+    instrumental: Optional[bool] = Form(None),
+    inference_steps: Optional[int] = Form(None),
+    guidance_scale: Optional[float] = Form(None),
+    use_random_seed: Optional[bool] = Form(None),
+    seed: Optional[int] = Form(None),
+    thinking: Optional[bool] = Form(None),
+    batch_size: Optional[int] = Form(None),
+    audio_format: Optional[str] = Form(None),
+    audio_cover_strength: float = Form(0.5),
+    cover_noise_strength: float = Form(0.2),
+):
+    """Upload a source audio file and reinterpret it in a new style.
+
+    - `audio_file`: source audio (MP3, WAV, FLAC, …)
+    - `caption`: style description for the remix
+    - `lyrics`: new lyrics (or leave unset to keep existing)
+    - `audio_cover_strength`: how closely the remix follows the source structure (0=creative, 1=faithful; default 0.5)
+    - `cover_noise_strength`: melody retention level (0=pure style transfer, 0.1–0.25 recommended; default 0.2)
+
+    Returns `{"data": {"task_id": "...", "status": "queued", ...}}`.
+    Poll `/v1/fullsong/result/{task_id}`, then download via `/v1/fullsong/audio/{task_id}`.
+    """
+    _require("fullsong")
+    suffix = Path(audio_file.filename or "audio").suffix or ".mp3"
+    with tempfile.NamedTemporaryFile(suffix=suffix, prefix="kg_remix_", delete=False) as tmp:
+        shutil.copyfileobj(audio_file.file, tmp)
+        src_audio_path = tmp.name
+
+    payload: dict = {
+        "task_type": "cover",
+        "src_audio_path": src_audio_path,
+        "audio_cover_strength": audio_cover_strength,
+        "cover_noise_strength": cover_noise_strength,
+    }
+    for key, val in [
+        ("caption", caption),
+        ("lyrics", lyrics),
+        ("instrumental", instrumental),
+        ("inference_steps", inference_steps),
+        ("guidance_scale", guidance_scale),
+        ("use_random_seed", use_random_seed),
+        ("seed", seed),
+        ("thinking", thinking),
+        ("batch_size", batch_size),
+        ("audio_format", audio_format),
+    ]:
+        if val is not None:
+            payload[key] = val
+
+    try:
+        resp = await request.app.state.http_client.post(
+            f"{ACESTEP_BASE_URL}/release_task",
+            json=payload,
         )
     except httpx.ConnectError:
         raise HTTPException(503, "Sub-service unreachable — is the model loaded?")

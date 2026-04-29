@@ -60,6 +60,57 @@ curl -X 'POST' \
 }
 ```
 
+# `/v1/fullsong/remix`
+
+## Request
+
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/v1/fullsong/remix' \
+  -H 'accept: application/json' \
+  -F 'audio_file=@source.mp3;type=audio/mpeg' \
+  -F 'caption=Genre: Lo-fi hip hop. Style: Chill, mellow, dusty samples. Mood: Relaxed, nostalgic.' \
+  -F 'lyrics=[Verse 1]
+Your lyrics here...' \
+  -F 'audio_cover_strength=0.5' \
+  -F 'cover_noise_strength=0.2'
+```
+
+Optional form fields (omit to use defaults):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `caption` | string | — | Style description for the remix |
+| `lyrics` | string | — | New lyrics (leave unset to keep original feel) |
+| `instrumental` | bool | — | Suppress vocals |
+| `inference_steps` | int | — | Diffusion steps |
+| `guidance_scale` | float | — | CFG guidance strength |
+| `use_random_seed` | bool | — | Randomise seed |
+| `seed` | int | — | Fixed seed for reproducibility |
+| `thinking` | bool | — | Enable chain-of-thought reasoning |
+| `batch_size` | int | — | Number of outputs |
+| `audio_format` | string | — | Output format (`mp3`, `wav`, …) |
+| `audio_cover_strength` | float | `0.5` | Remix Strength: 0=creative freedom, 1=faithful to source |
+| `cover_noise_strength` | float | `0.2` | Cover Strength (Melody Retention): 0=pure style transfer, 0.1–0.25 recommended |
+
+## Response
+
+```json
+{
+  "data": {
+    "task_id": "a1b2c3d4-0000-0000-0000-000000000000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1776227065582,
+  "extra": null
+}
+```
+
+Poll `/v1/fullsong/result/{task_id}` and download via `/v1/fullsong/audio/{task_id}` — same flow as `/v1/fullsong/generate`.
+
 # `/v1/fullsong/result/{task_id}`
 
 ## Request
