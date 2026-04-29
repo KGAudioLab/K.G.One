@@ -283,6 +283,83 @@ async def fullsong_remix(
     )
 
 
+@app.post(
+    "/v1/fullsong/repaint",
+    tags=["fullsong"],
+    summary="Repaint a time region of an existing song (ACE-Step 1.5)",
+)
+async def fullsong_repaint(
+    request: Request,
+    audio_file: UploadFile = File(...),
+    caption: Optional[str] = Form(None),
+    lyrics: Optional[str] = Form(None),
+    instrumental: Optional[bool] = Form(None),
+    inference_steps: Optional[int] = Form(None),
+    guidance_scale: Optional[float] = Form(None),
+    use_random_seed: Optional[bool] = Form(None),
+    seed: Optional[int] = Form(None),
+    thinking: Optional[bool] = Form(None),
+    batch_size: Optional[int] = Form(None),
+    audio_format: Optional[str] = Form(None),
+    repainting_start: float = Form(0.0),
+    repainting_end: float = Form(-1.0),
+    repaint_strength: float = Form(0.5),
+):
+    """Upload a source audio file and re-generate a time region in a new style.
+
+    - `audio_file`: source audio (MP3, WAV, FLAC, …)
+    - `caption`: style description for the repainted region
+    - `repainting_start`: start of the region to repaint in seconds (default 0.0)
+    - `repainting_end`: end of the region in seconds; -1 = until end of track (default -1.0)
+    - `repaint_strength`: 0=preserve source closely, 1=full regeneration (default 0.5)
+
+    Returns `{"data": {"task_id": "...", "status": "queued", ...}}`.
+    Poll `/v1/fullsong/result/{task_id}`, then download via `/v1/fullsong/audio/{task_id}`.
+    """
+    _require("fullsong")
+    suffix = Path(audio_file.filename or "audio").suffix or ".mp3"
+    with tempfile.NamedTemporaryFile(suffix=suffix, prefix="kg_repaint_", delete=False) as tmp:
+        shutil.copyfileobj(audio_file.file, tmp)
+        src_audio_path = tmp.name
+
+    payload: dict = {
+        "task_type": "repaint",
+        "src_audio_path": src_audio_path,
+        "repaint_mode": "balanced",
+        "repainting_start": repainting_start,
+        "repainting_end": repainting_end,
+        "repaint_strength": repaint_strength,
+    }
+    for key, val in [
+        ("caption", caption),
+        ("lyrics", lyrics),
+        ("instrumental", instrumental),
+        ("inference_steps", inference_steps),
+        ("guidance_scale", guidance_scale),
+        ("use_random_seed", use_random_seed),
+        ("seed", seed),
+        ("thinking", thinking),
+        ("batch_size", batch_size),
+        ("audio_format", audio_format),
+    ]:
+        if val is not None:
+            payload[key] = val
+
+    try:
+        resp = await request.app.state.http_client.post(
+            f"{ACESTEP_BASE_URL}/release_task",
+            json=payload,
+        )
+    except httpx.ConnectError:
+        raise HTTPException(503, "Sub-service unreachable — is the model loaded?")
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers={k: v for k, v in resp.headers.items() if k.lower() not in ("transfer-encoding",)},
+        media_type=resp.headers.get("content-type"),
+    )
+
+
 @app.get(
     "/v1/fullsong/result/{task_id}",
     tags=["fullsong"],

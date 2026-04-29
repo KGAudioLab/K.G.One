@@ -111,6 +111,59 @@ Optional form fields (omit to use defaults):
 
 Poll `/v1/fullsong/result/{task_id}` and download via `/v1/fullsong/audio/{task_id}` — same flow as `/v1/fullsong/generate`.
 
+# `/v1/fullsong/repaint`
+
+## Request
+
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/v1/fullsong/repaint' \
+  -H 'accept: application/json' \
+  -F 'audio_file=@source.mp3;type=audio/mpeg' \
+  -F 'caption=Genre: Jazz piano. Style: Smooth, mellow, intimate.' \
+  -F 'repainting_start=30.0' \
+  -F 'repainting_end=60.0' \
+  -F 'repaint_strength=0.5'
+```
+
+Optional form fields (omit to use defaults):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `caption` | string | — | Style description for the repainted region |
+| `lyrics` | string | — | New lyrics for the repainted region |
+| `instrumental` | bool | — | Suppress vocals |
+| `inference_steps` | int | — | Diffusion steps |
+| `guidance_scale` | float | — | CFG guidance strength |
+| `use_random_seed` | bool | — | Randomise seed |
+| `seed` | int | — | Fixed seed for reproducibility |
+| `thinking` | bool | — | Enable chain-of-thought reasoning |
+| `batch_size` | int | — | Number of outputs |
+| `audio_format` | string | — | Output format (`mp3`, `wav`, …) |
+| `repainting_start` | float | `0.0` | Start of repaint region in seconds |
+| `repainting_end` | float | `-1.0` | End of repaint region in seconds; -1 = until end of track |
+| `repaint_strength` | float | `0.5` | 0=preserve source closely, 1=full regeneration |
+
+`repaint_mode` is fixed to `"balanced"`.
+
+## Response
+
+```json
+{
+  "data": {
+    "task_id": "a1b2c3d4-0000-0000-0000-000000000000",
+    "status": "queued",
+    "queue_position": 1
+  },
+  "code": 200,
+  "error": null,
+  "timestamp": 1776227065582,
+  "extra": null
+}
+```
+
+Poll `/v1/fullsong/result/{task_id}` and download via `/v1/fullsong/audio/{task_id}` — same flow as `/v1/fullsong/generate`.
+
 # `/v1/fullsong/result/{task_id}`
 
 ## Request

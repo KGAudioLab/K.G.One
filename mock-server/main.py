@@ -248,6 +248,44 @@ async def fullsong_remix(
     }
 
 
+@app.post(
+    "/v1/fullsong/repaint",
+    tags=["fullsong"],
+    summary="Repaint a time region of an existing song (ACE-Step 1.5)",
+)
+async def fullsong_repaint(
+    audio_file: UploadFile = File(...),
+    caption: Optional[str] = Form(None),
+    lyrics: Optional[str] = Form(None),
+    instrumental: Optional[bool] = Form(None),
+    inference_steps: Optional[int] = Form(None),
+    guidance_scale: Optional[float] = Form(None),
+    use_random_seed: Optional[bool] = Form(None),
+    seed: Optional[int] = Form(None),
+    thinking: Optional[bool] = Form(None),
+    batch_size: Optional[int] = Form(None),
+    audio_format: Optional[str] = Form(None),
+    repainting_start: float = Form(0.0),
+    repainting_end: float = Form(-1.0),
+    repaint_strength: float = Form(0.5),
+):
+    """Mock repaint endpoint — accepts the same multipart form as the real server."""
+    _require("fullsong")
+    task_id = str(uuid.uuid4())
+    _tasks[task_id] = {"created_at": time.time(), "model_filename": None}
+    return {
+        "data": {
+            "task_id": task_id,
+            "status": "queued",
+            "queue_position": 1,
+        },
+        "code": 200,
+        "error": None,
+        "timestamp": int(time.time() * 1000),
+        "extra": None,
+    }
+
+
 @app.get(
     "/v1/fullsong/result/{task_id}",
     tags=["fullsong"],
